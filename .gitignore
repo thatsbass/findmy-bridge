@@ -1,0 +1,20 @@
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Apple authentication/session data
+account_session.json
+saveaccount_session.json
+*.session.json
+
+# Private keys and credentials
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.json
+
+# Anisette local cache
+.anisette_libs/
