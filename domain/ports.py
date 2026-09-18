@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from domain.models import Position, Tag
+from domain.positions.model import Position
+from domain.tags.model import Tag
 
 
 class TagRepository(Protocol):
@@ -13,4 +14,3 @@ class TagRepository(Protocol):
 
 class PositionPublisher(Protocol):
     async def publish(self, position: Position) -> None: ...
-    async def close(self) -> None: ...

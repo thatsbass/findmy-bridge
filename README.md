@@ -1,127 +1,171 @@
+# findmy-bridge
 
-# FINDMY BRIGE
+Service Python qui récupère les rapports Apple Find My, extrait les positions
+des tags, puis publie la position la plus récente vers un backend.
 
-![Python Version](https://shields.io)
-![Database](https://shields.io)
-![Infrastructure](https://shields.io)
-![Code Style](https://shields.io)
-[![License](https://shields.io)](LICENSE)
+## Fonctionnalités
 
-Python service to poll the Apple Find My network, decrypt BLE tag reports, </br>
-and forward locations to a backend.
+- authentification Apple avec persistance de session et prise en charge de la 2FA ;
+- sélection des tags actifs depuis PostgreSQL ;
+- récupération et déchiffrement des rapports Find My par lots ;
+- publication des nouvelles positions vers le backend configuré ;
+- endpoint HTTP `GET /health` pour la supervision ;
+- polling immédiat au démarrage, puis à intervalle fixe.
 
-## FEATURES
+## Architecture
 
-- Persists Apple authentication via a one-time 2FA login.
-- Loads active tags and cryptographic material from PostgreSQL.
-- Fetches and decrypts Apple Find My reports in batches.
-- Publishes the latest position for each tag to a backend endpoint.
-- Exposes a `/health` endpoint for monitoring.
-
-## ARCHITECTURE
+Le projet est un modular monolith. Le worker orchestre les services applicatifs,
+qui utilisent le domaine, les repositories et les intégrations externes.
 
 ```text
-├── main.py                # Application startup and graceful shutdown
-├── setup.py               # One-time Apple login and session persistence
-├── config/                # Environment loading and validation
-├── domain/                # Core models and protocol interfaces
-├── apple/                 # Apple Find My session management and report fetching
-├── infrastructure/        # PostgreSQL repository and backend publisher
-├── notifications/         # Notification contract, dispatcher, and providers
-├── application/           # Polling orchestration and publish workflow
-├── health/                # Healthcheck HTTP endpoint
-├── migrations/            # Database schema and seed data
-└── mock_backend/          # Local backend emulator for testing
+main.py
+├── worker/              lifecycle et planification du polling
+├── services/            cas d’utilisation polling et publication
+├── domain/              modèles, règles et contrats applicatifs
+├── infrastructure/     accès PostgreSQL et détails techniques
+├── integrations/        Apple, Anisette, backend et notifications
+├── api/                 application FastAPI et endpoints HTTP
+├── config/              configuration et logging
+├── cli/                 authentification Apple et migrations
+└── migrations/          schéma et données de développement
 ```
 
-## PREREQUISITES & QUICK START
+## Prérequis
 
-Ensure you have Python 3.10+ and PostgreSQL installed.
+- Python 3.12 ou supérieur ;
+- PostgreSQL ;
+- un compte Apple compatible avec Apple Find My ;
+- un backend qui accepte `POST /api/internal/positions` avec l’en-tête
+  `X-API-Key`.
 
-1. Initialize the environment:
+## Installation et démarrage
+
+Créer l’environnement virtuel et installer les dépendances :
+
 ```bash
 make venv
 ```
 
-2. Configure environment variables:
-```bash
-cp .env.example .env
-```
+Créer un fichier `.env` à la racine avec les variables nécessaires (voir la
+table ci-dessous). Les secrets ne doivent jamais être commités.
 
-3. Perform the initial interactive Apple 2FA login:
+Initialiser la session Apple :
+
 ```bash
 make setup
 ```
 
-4. Run database migrations and seed test data:
+Appliquer le schéma PostgreSQL :
+
 ```bash
 make migrate
+```
+
+Pour un environnement local, les données de démonstration peuvent être ajoutées
+avec :
+
+```bash
 make seed
 ```
 
-5. Start the service in development mode:
+Démarrer le worker et l’API :
+
 ```bash
 make dev
 ```
 
-## ENVIRONMENT VARIABLES
+L’API de supervision est disponible sur `http://localhost:8080/health`, sauf si
+`HEALTH_PORT` est configuré autrement.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `APPLE_ID` | Yes | — | Apple iCloud email |
-| `APPLE_PASSWORD` | Yes | — | App-specific password |
-| `BACKEND_URL` | Yes | — | Backend service base URL |
-| `BACKEND_API_KEY` | Yes | — | Internal API key (`X-API-Key`) |
-| `DATABASE_URL` | Yes | — | PostgreSQL DSN |
-| `POLL_INTERVAL_MINUTES` | No | `20` | Polling interval in minutes |
-| `MAX_CONCURRENT_TAGS` | No | `10` | Max tags fetched in parallel |
-| `HEALTH_PORT` | No | `8080` | Health server port |
-| `ENV` | No | `development` | `development` or `production` |
-| `LOG_LEVEL` | No | `info` | `debug`, `info`, `warning`, `error` |
-| `SLACK_WEBHOOK_URL` | No | — | Slack Incoming Webhook for alerts |
+## Configuration
 
-## MAKEFILE COMMANDS
+| Variable | Requise | Valeur par défaut | Description |
+|---|---:|---|---|
+| `APPLE_ID` | Oui | — | Identifiant Apple iCloud |
+| `APPLE_PASSWORD` | Oui | — | Mot de passe applicatif Apple |
+| `BACKEND_URL` | Non | `http://localhost:5000` | URL de base du backend |
+| `BACKEND_API_KEY` | Oui | — | Clé envoyée dans `X-API-Key` |
+| `DATABASE_URL` | Oui | — | URL de connexion PostgreSQL |
+| `POLL_INTERVAL_MINUTES` | Non | `20` | Intervalle entre deux cycles |
+| `HEALTH_PORT` | Non | `8080` | Port de l’API health |
+| `ENV` | Non | `development` | `development` ou `production` |
+| `LOG_LEVEL` | Non | `info` | `debug`, `info`, `warning` ou `error` |
+| `SLACK_WEBHOOK_URL` | Non | — | Webhook Slack pour les alertes 2FA/session |
+| `ANISETTE_PROVIDER` | Non | `local` | Provider `local` ou `http` |
+| `ANISETTE_URL` | Conditionnelle | — | URL requise avec le provider `http` |
+| `ANISETTE_LIBS_PATH` | Non | `.anisette_libs` | Chemin des bibliothèques Anisette locales |
+| `APPLE_SESSION_PATH` | Non | `account_session.json` | Fichier de session Apple persisté |
 
-- `make venv` : Create `.venv` environment and install dependencies.
-- `make setup` : Run interactive Apple 2FA login (execute once).
-- `make migrate` : Apply database schema migrations.
-- `make seed` : Insert a development test tag.
-- `make dev` : Run the service locally.
-- `make lint` : Lint code quality using ruff.
-- `make format` : Format code files using black.
-- `make test` : Execute unit tests via pytest.
-- `make clean` : Remove `__pycache__` directories and build caches.
+La configuration est validée au démarrage. Les valeurs numériques doivent être
+des entiers strictement positifs et les valeurs énumérées doivent respecter les
+valeurs autorisées.
 
-## LOGGING
+## API
 
-### Development (`ENV=development`)
-Standard human-readable output:
-```text
-2026-05-18 00:25:56  INFO      apple.session                Session restored — user@email.com
-2026-05-18 00:25:56  INFO      application.poll_cycle       [a3f2c1b0] Cycle started — 42 active tags
-2026-05-18 00:25:56  INFO      infrastructure.pusher        [a3f2c1b0] Position published  tag=abc-123
-```
+### `GET /health`
 
-### Production (`ENV=production`)
-Structured JSON output for aggregation tools (ELK, Datadog, CloudWatch):
+Réponse normale :
+
 ```json
-{"ts": "2026-05-18T00:25:56Z", "level": "INFO", "logger": "apple.session", "msg": "Session restored"}
-{"ts": "2026-05-18T00:25:56Z", "level": "INFO", "logger": "application.poll_cycle", "msg": "Cycle started — 42 active tags", "cycle_id": "a3f2c1b0"}
+{"status": "ok"}
 ```
-*Note: All logs within the same polling cycle share a unique `cycle_id` for distributed tracing.*
 
-## SESSION MANAGEMENT
+L’API est une couche HTTP de supervision. Le traitement des tags et la
+publication restent dans les services utilisés par le worker.
 
-The session is persisted locally in `account_session.json` after the initial authentication. A background watchdog verifies session health every 30 minutes and re-authenticates proactively before the 24-hour token expiry.
+## Polling
 
-**Security Warning:** Never commit `account_session.json` to version control. It contains active authentication credentials.
+Chaque cycle suit ce flux :
 
-## SCALABILITY
+```text
+PollingWorker
+  → PollingService
+  → repository PostgreSQL
+  → intégration Apple
+  → PublishingService
+  → intégration backend
+```
 
-| Tag Volume | Architecture Strategy |
-|---|---|
-| `< 5,000` | Default architecture. Optimize via `MAX_CONCURRENT_TAGS`. |
-| `5,000 – 20,000` | Multi-account distribution. Run one worker process per Apple account. |
-| `> 20,000` | Distributed queue. Deploy ARQ, Redis, and Kubernetes autoscaling. |
+Le premier cycle est exécuté immédiatement au démarrage. Les erreurs d’un
+rapport, d’un tag ou d’une publication sont isolées autant que possible afin de
+ne pas interrompre inutilement les autres traitements. Les retries réseau sont
+bornés et réservés aux erreurs temporaires.
 
-*Note: Transitioning to an official MFi Find My Network certification removes account pooling restrictions by granting direct access to Apple's enterprise REST API.*
+## Session Apple
+
+La session est enregistrée dans `APPLE_SESSION_PATH` après l’authentification
+initiale. L’intégration Apple possède un watchdog qui renouvelle la session
+lorsqu’elle approche de son expiration.
+
+Ne partagez ni le fichier de session, ni le mot de passe Apple, ni les clés API.
+
+## Commandes de développement
+
+```text
+make venv      Crée l’environnement virtuel et installe les dépendances
+make setup     Effectue l’authentification Apple interactive
+make migrate   Applique une migration SQL
+make seed      Ajoute les données locales de démonstration
+make dev       Lance le worker et l’API
+make lint      Exécute Ruff s’il est installé
+make format    Exécute Black s’il est installé
+make test      Lance la suite unittest
+make clean     Supprime les caches Python et outils
+```
+
+Les tests automatisés ne doivent pas dépendre d’un serveur Apple, PostgreSQL ou
+backend réel. Les intégrations utilisent des contrats injectables pour rester
+testables localement.
+
+## Dépannage
+
+- `Missing required environment variable` : vérifier le fichier `.env` et les
+  variables obligatoires.
+- `2FA required — run 'make setup' first` : créer ou renouveler la session Apple.
+- erreur de connexion PostgreSQL : vérifier `DATABASE_URL`, le service PostgreSQL
+  et les migrations.
+- erreur de publication : vérifier `BACKEND_URL`, `BACKEND_API_KEY` et la
+  disponibilité du endpoint backend.
+
+Les logs de production sont structurés en JSON lorsque `ENV=production`. Aucun
+secret ne doit apparaître dans les logs.
