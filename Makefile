@@ -8,7 +8,7 @@ venv:
 	.venv/bin/pip install -r requirements.txt
 
 setup:
-	$(PYTHON) setup.py
+	$(PYTHON) cli/setup.py
 
 dev:
 	$(PYTHON) main.py
@@ -23,16 +23,16 @@ format:
 	$(PYTHON) -m black .
 
 test:
-	$(PYTHON) -m pytest tests/ -v
+	$(PYTHON) -m unittest discover -s tests -v
 
 mock:
 	node mock_backend/server.js
 
 migrate:
-	$(PYTHON) migrate.py migrations/001_initial_schema.sql
+	$(PYTHON) cli/migrate.py migrations/001_initial_schema.sql
 
 seed:
-	$(PYTHON) migrate.py migrations/seed_dev.sql
+	$(PYTHON) cli/migrate.py migrations/seed_dev.sql
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +

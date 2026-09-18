@@ -4,6 +4,14 @@
 .env.*
 !.env.example
 
+# Local environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
 # Apple authentication/session data
 account_session.json
 saveaccount_session.json

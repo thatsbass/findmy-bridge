@@ -14,35 +14,40 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from config import Config
+from config.settings import Config
 
 
 class CycleIdFilter(logging.Filter):
     """Injects cycle_id from contextvars into every log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        from application.poll_cycle import get_cycle_id
+        from services.polling import get_cycle_id
+
         record.cycle_id = get_cycle_id()
         return True
 
+
 class _DevFormatter(logging.Formatter):
     _COLORS = {
-        "DEBUG":    "\033[36m",   # cyan
-        "INFO":     "\033[32m",   # green
-        "WARNING":  "\033[33m",   # yellow
-        "ERROR":    "\033[31m",   # red
-        "CRITICAL": "\033[35m",   # magenta
+        "DEBUG": "\033[36m",
+        "INFO": "\033[32m",
+        "WARNING": "\033[33m",
+        "ERROR": "\033[31m",
+        "CRITICAL": "\033[35m",
     }
     _RESET = "\033[0m"
 
     def format(self, record: logging.LogRecord) -> str:
         color = self._COLORS.get(record.levelname, "")
-        ts    = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
+        ts = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
         level = f"{color}{record.levelname:<8}{self._RESET}"
-        name  = f"{record.name:<30}"
-        cid   = f"\033[2m[{record.cycle_id}]\033[0m " if record.cycle_id != "-" else ""
-        msg   = record.getMessage()
-        line  = f"{ts}  {level}  {name}  {cid}{msg}"
+        name = f"{record.name:<30}"
+        cycle_id = (
+            f"\033[2m[{record.cycle_id}]\033[0m "
+            if record.cycle_id != "-"
+            else ""
+        )
+        line = f"{ts}  {level}  {name}  {cycle_id}{record.getMessage()}"
 
         if record.exc_info:
             line += "\n" + self.formatException(record.exc_info)
@@ -51,11 +56,11 @@ class _DevFormatter(logging.Formatter):
 
 class _JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        payload: dict = {
-            "ts":     datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level":  record.levelname,
+        payload: dict[str, object] = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
             "logger": record.name,
-            "msg":    record.getMessage(),
+            "msg": record.getMessage(),
         }
         if record.cycle_id != "-":
             payload["cycle_id"] = record.cycle_id

@@ -1,0 +1,1 @@
+"""Anisette provider integration."""
